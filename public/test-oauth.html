@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Google OAuth</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Google OAuth</h1>
+    <button id="googleBtn">Login with Google</button>
+    <div id="result"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://dlauvsklnlpiuypzeumy.supabase.co'
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsYXV2c2tsbmxwaXV5cHpldW15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NDU5NTcsImV4cCI6MjA4MDUyMTk1N30.mrtCvnwrsVerA16ZIiZ6dCZ_rN--Rb4ZqI8bUDL5uWo'
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+        document.getElementById('googleBtn').addEventListener('click', async () => {
+            const result = document.getElementById('result')
+            result.textContent = 'Initiating OAuth...'
+
+            try {
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: `${window.location.origin}/test-oauth.html`,
+                        queryParams: {
+                            access_type: 'offline',
+                            prompt: 'consent',
+                        },
+                    },
+                })
+
+                if (error) {
+                    result.textContent = `Error: ${error.message}`
+                    console.error('OAuth Error:', error)
+                } else {
+                    result.textContent = 'Redirecting to Google...'
+                    console.log('OAuth initiated:', data)
+                }
+            } catch (err) {
+                result.textContent = `Unexpected error: ${err.message}`
+                console.error('Unexpected error:', err)
+            }
+        })
+
+        // Check if we have auth callback
+        const urlParams = new URLSearchParams(window.location.search)
+        if (urlParams.has('code') || urlParams.has('error')) {
+            document.getElementById('result').textContent = 'OAuth callback received! Processing...'
+            console.log('OAuth callback params:', Object.fromEntries(urlParams.entries()))
+
+            // Handle the callback
+            supabase.auth.getSession().then(({ data, error }) => {
+                if (error) {
+                    document.getElementById('result').textContent = `Session error: ${error.message}`
+                    console.error('Session error:', error)
+                } else if (data.session) {
+                    document.getElementById('result').textContent = `✅ LOGIN BERHASIL! User: ${data.session.user.email}`
+                    console.log('✅ Session established:', data.session.user)
+                } else {
+                    document.getElementById('result').textContent = '❌ No session found after callback'
+                    console.log('No session after callback')
+                }
+            })
+        } else {
+            // Check existing session
+            supabase.auth.getSession().then(({ data, error }) => {
+                if (data.session) {
+                    document.getElementById('result').textContent = `Already logged in: ${data.session.user.email}`
+                }
+            })
+        }
+    </script>
+</body>
+</html>
