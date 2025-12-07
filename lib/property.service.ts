@@ -15,6 +15,9 @@ export interface Property {
   is_featured: boolean
   is_premium: boolean
   is_super_premium: boolean
+  featured_until?: string
+  premium_until?: string
+  super_premium_until?: string
   views_count: number
   whatsapp_click: number
   created_at: string
@@ -25,12 +28,54 @@ export interface Property {
     whatsapp: string
   }
   images?: PropertyImage[]
+  package_orders?: PropertyPackageOrder[]
 }
 
 export interface PropertyImage {
   id: string
   property_id: string
   image_url: string
+  created_at: string
+}
+
+export interface PropertyPackage {
+  id: string
+  name: 'featured' | 'premium' | 'super_premium'
+  price: number
+  duration_days: number
+  created_at: string
+}
+
+export interface PropertyPackageOrder {
+  id: string
+  property_id: string
+  agent_id: string
+  package_id: string
+  status: 'pending' | 'paid' | 'expired' | 'canceled'
+  payment_method: string
+  paid_at?: string
+  expired_at?: string
+  created_at: string
+  package?: PropertyPackage
+}
+
+export interface AgentMembership {
+  id: string
+  agent_id: string
+  tier: 'free' | 'pro' | 'agency'
+  expired_at?: string
+  created_at: string
+}
+
+export interface MembershipPayment {
+  id: string
+  agent_id: string
+  tier: 'free' | 'pro' | 'agency'
+  amount: number
+  payment_method: string
+  status: 'pending' | 'paid' | 'expired' | 'canceled'
+  paid_at?: string
+  expired_at?: string
   created_at: string
 }
 
@@ -72,9 +117,12 @@ class PropertyService {
       .select(`
         *,
         agent:agents(name, email, whatsapp),
-        images:property_images(*)
+        images:property_images(*),
+        package_orders:property_package_orders(
+          *,
+          package:property_packages(*)
+        )
       `)
-      .order('created_at', { ascending: false })
 
     // Apply filters
     if (filters.property_type) {
@@ -102,17 +150,41 @@ class PropertyService {
       query = query.eq('agent_id', filters.agent_id)
     }
 
-    // Pagination
-    const from = (page - 1) * limit
-    const to = from + limit - 1
-    query = query.range(from, to)
-
+    // Get data first, then sort by priority
     const { data, error, count } = await query
 
     if (error) throw error
 
+    // Sort by priority: Super Premium > Premium > Featured > Regular
+    const sortedData = (data as Property[]).sort((a, b) => {
+      const now = new Date()
+
+      // Check active packages
+      const aSuperPremium = a.super_premium_until && new Date(a.super_premium_until) > now ? 4 : 0
+      const aPremium = a.premium_until && new Date(a.premium_until) > now ? 3 : 0
+      const aFeatured = a.featured_until && new Date(a.featured_until) > now ? 2 : 0
+      const aPriority = aSuperPremium || aPremium || aFeatured || 1
+
+      const bSuperPremium = b.super_premium_until && new Date(b.super_premium_until) > now ? 4 : 0
+      const bPremium = b.premium_until && new Date(b.premium_until) > now ? 3 : 0
+      const bFeatured = b.featured_until && new Date(b.featured_until) > now ? 2 : 0
+      const bPriority = bSuperPremium || bPremium || bFeatured || 1
+
+      // Higher priority first, then by creation date
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority
+      }
+
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
+    // Apply pagination after sorting
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+    const paginatedData = sortedData.slice(from, to + 1)
+
     return {
-      properties: data as Property[],
+      properties: paginatedData,
       total: count || 0,
       page,
       limit,
@@ -452,6 +524,285 @@ class PropertyService {
       expired: 'gray'
     }
     return colors[status] || 'gray'
+  }
+
+  // Package management methods
+  async getPropertyPackages() {
+    const { data, error } = await supabase
+      .from('property_packages')
+      .select('*')
+      .order('price', { ascending: true })
+
+    if (error) throw error
+
+    return data as PropertyPackage[]
+  }
+
+  async upgradePropertyPackage(propertyId: string, packageId: string, agentId: string) {
+    // Verify property ownership
+    const { data: property } = await supabase
+      .from('properties')
+      .select('agent_id')
+      .eq('id', propertyId)
+      .single()
+
+    if (!property || property.agent_id !== agentId) {
+      throw new Error('Unauthorized to upgrade this property')
+    }
+
+    // Get package details
+    const { data: packageData } = await supabase
+      .from('property_packages')
+      .select('*')
+      .eq('id', packageId)
+      .single()
+
+    if (!packageData) {
+      throw new Error('Package not found')
+    }
+
+    // Create order
+    const expiredAt = new Date()
+    expiredAt.setDate(expiredAt.getDate() + packageData.duration_days)
+
+    const { data: order, error: orderError } = await supabase
+      .from('property_package_orders')
+      .insert({
+        property_id: propertyId,
+        agent_id: agentId,
+        package_id: packageId,
+        status: 'pending',
+        payment_method: 'midtrans', // Default, will be updated by payment gateway
+        expired_at: expiredAt.toISOString()
+      })
+      .select()
+      .single()
+
+    if (orderError) throw orderError
+
+    return order as PropertyPackageOrder
+  }
+
+  async activatePropertyPackage(orderId: string, adminId?: string) {
+    // Get order details
+    const { data: order } = await supabase
+      .from('property_package_orders')
+      .select(`
+        *,
+        package:property_packages(*),
+        property:properties(id, agent_id)
+      `)
+      .eq('id', orderId)
+      .single()
+
+    if (!order) {
+      throw new Error('Order not found')
+    }
+
+    // Update order status
+    const { error: orderUpdateError } = await supabase
+      .from('property_package_orders')
+      .update({
+        status: 'paid',
+        paid_at: new Date().toISOString()
+      })
+      .eq('id', orderId)
+
+    if (orderUpdateError) throw orderUpdateError
+
+    // Update property package status
+    const packageName = order.package.name
+    const expiredAt = order.expired_at
+
+    const updateData: any = {}
+    updateData[`${packageName}_until`] = expiredAt
+    updateData[`is_${packageName}`] = true
+    updateData.updated_at = new Date().toISOString()
+
+    const { error: propertyUpdateError } = await supabase
+      .from('properties')
+      .update(updateData)
+      .eq('id', order.property_id)
+
+    if (propertyUpdateError) throw propertyUpdateError
+
+    return order
+  }
+
+  async getPropertyPackageOrders(agentId?: string) {
+    let query = supabase
+      .from('property_package_orders')
+      .select(`
+        *,
+        package:property_packages(*),
+        property:properties(title, status),
+        agent:agents(name, email)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (agentId) {
+      query = query.eq('agent_id', agentId)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+
+    return data as (PropertyPackageOrder & {
+      package: PropertyPackage
+      property: { title: string; status: string }
+      agent: { name: string; email: string }
+    })[]
+  }
+
+  // Membership management
+  async getAgentMembership(agentId: string) {
+    const { data, error } = await supabase
+      .from('agent_memberships')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows returned
+
+    return data as AgentMembership | null
+  }
+
+  async upgradeAgentMembership(agentId: string, tier: AgentMembership['tier']) {
+    const membershipConfig = {
+      free: { duration: 0, price: 0 },
+      pro: { duration: 30, price: 50000 },
+      agency: { duration: 365, price: 500000 }
+    }
+
+    const config = membershipConfig[tier]
+    const expiredAt = tier === 'free' ? null : new Date(Date.now() + config.duration * 24 * 60 * 60 * 1000).toISOString()
+
+    // Create or update membership
+    const { data, error } = await supabase
+      .from('agent_memberships')
+      .upsert({
+        agent_id: agentId,
+        tier,
+        expired_at: expiredAt
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return data as AgentMembership
+  }
+
+  async getAgentMembershipLimits(agentId: string) {
+    const membership = await this.getAgentMembership(agentId)
+
+    const limits = {
+      free: { maxListings: 5, canUseFeatured: false, canUsePremium: false, canUseSuperPremium: false },
+      pro: { maxListings: 50, canUseFeatured: true, canUsePremium: false, canUseSuperPremium: false },
+      agency: { maxListings: -1, canUseFeatured: true, canUsePremium: true, canUseSuperPremium: true } // -1 = unlimited
+    }
+
+    return membership ? limits[membership.tier] : limits.free
+  }
+
+  async canAgentCreateListing(agentId: string) {
+    const limits = await this.getAgentMembershipLimits(agentId)
+
+    if (limits.maxListings === -1) return true // Unlimited
+
+    // Count current approved listings
+    const { count } = await supabase
+      .from('properties')
+      .select('*', { count: 'exact', head: true })
+      .eq('agent_id', agentId)
+      .in('status', ['pending', 'approved'])
+
+    return (count || 0) < limits.maxListings
+  }
+
+  async canAgentUsePackage(agentId: string, packageName: string) {
+    const limits = await this.getAgentMembershipLimits(agentId)
+
+    switch (packageName) {
+      case 'featured':
+        return limits.canUseFeatured
+      case 'premium':
+        return limits.canUsePremium
+      case 'super_premium':
+        return limits.canUseSuperPremium
+      default:
+        return false
+    }
+  }
+
+  // Cron job simulation - check expired packages
+  async checkExpiredPackages() {
+    const now = new Date().toISOString()
+
+    // Update properties where packages have expired
+    const { error } = await supabase.rpc('check_expired_property_packages', { current_time: now })
+
+    if (error) {
+      // Fallback if RPC doesn't exist
+      console.log('RPC function not found, using manual update')
+
+      // Reset expired featured
+      await supabase
+        .from('properties')
+        .update({
+          is_featured: false,
+          featured_until: null,
+          updated_at: now
+        })
+        .lt('featured_until', now)
+        .eq('is_featured', true)
+
+      // Reset expired premium
+      await supabase
+        .from('properties')
+        .update({
+          is_premium: false,
+          premium_until: null,
+          updated_at: now
+        })
+        .lt('premium_until', now)
+        .eq('is_premium', true)
+
+      // Reset expired super premium
+      await supabase
+        .from('properties')
+        .update({
+          is_super_premium: false,
+          super_premium_until: null,
+          updated_at: now
+        })
+        .lt('super_premium_until', now)
+        .eq('is_super_premium', true)
+    }
+  }
+
+  // Get package priority for sorting
+  getPropertyPriority(property: Property): number {
+    const now = new Date()
+
+    if (property.super_premium_until && new Date(property.super_premium_until) > now) return 4
+    if (property.premium_until && new Date(property.premium_until) > now) return 3
+    if (property.featured_until && new Date(property.featured_until) > now) return 2
+
+    return 1 // Regular
+  }
+
+  // Format package price
+  formatPackagePrice(price: number): string {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(price)
   }
 }
 

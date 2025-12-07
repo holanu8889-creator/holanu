@@ -219,43 +219,75 @@ export default function PropertiesPage() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-                  {properties.map((property) => (
-                    <div key={property.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow">
-                      {/* Property Image */}
-                      <div className="relative">
-                        {property.images && property.images.length > 0 ? (
-                          <img
-                            src={property.images[0].image_url}
-                            alt={property.title}
-                            className="w-full h-48 object-cover rounded-t-lg"
-                          />
-                        ) : (
-                          <div className="w-full h-48 bg-gray-200 rounded-t-lg flex items-center justify-center">
-                            <svg className="h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
+                  {properties.map((property) => {
+                    const priority = propertyService.getPropertyPriority(property)
+                    const isSuperPremium = priority === 4
+                    const isPremium = priority === 3
+                    const isFeatured = priority === 2
+
+                    return (
+                      <div
+                        key={property.id}
+                        className={`bg-white rounded-lg shadow hover:shadow-lg transition-all ${
+                          isSuperPremium ? 'ring-2 ring-yellow-400 transform hover:scale-105' :
+                          isPremium ? 'ring-2 ring-blue-400' :
+                          isFeatured ? 'ring-2 ring-purple-400' : ''
+                        }`}
+                      >
+                        {/* Property Image */}
+                        <div className="relative">
+                          {property.images && property.images.length > 0 ? (
+                            <img
+                              src={property.images[0].image_url}
+                              alt={property.title}
+                              className={`w-full object-cover rounded-t-lg ${
+                                isSuperPremium ? 'h-56' : 'h-48'
+                              }`}
+                            />
+                          ) : (
+                            <div className={`w-full bg-gray-200 rounded-t-lg flex items-center justify-center ${
+                              isSuperPremium ? 'h-56' : 'h-48'
+                            }`}>
+                              <svg className="h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* Badges */}
+                          <div className="absolute top-3 left-3 flex flex-col gap-2">
+                            {isSuperPremium && (
+                              <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                                🔥 SUPER PREMIUM
+                              </span>
+                            )}
+                            {isPremium && !isSuperPremium && (
+                              <span className="bg-gradient-to-r from-blue-400 to-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                                ⭐ PREMIUM
+                              </span>
+                            )}
+                            {isFeatured && !isPremium && !isSuperPremium && (
+                              <span className="bg-gradient-to-r from-purple-400 to-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                                💎 FEATURED
+                              </span>
+                            )}
                           </div>
-                        )}
 
-                        {/* Badges */}
-                        <div className="absolute top-3 left-3 flex flex-col gap-2">
-                          {property.is_featured && (
-                            <span className="bg-yellow-500 text-white px-2 py-1 rounded text-xs font-medium">
-                              Featured
-                            </span>
-                          )}
-                          {property.is_premium && (
-                            <span className="bg-purple-500 text-white px-2 py-1 rounded text-xs font-medium">
-                              Premium
-                            </span>
-                          )}
+                          {/* Views & Priority Indicator */}
+                          <div className="absolute top-3 right-3 flex flex-col gap-2">
+                            <div className="bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
+                              👁 {property.views_count || 0}
+                            </div>
+                            {priority > 1 && (
+                              <div className={`text-white px-2 py-1 rounded text-xs font-bold ${
+                                isSuperPremium ? 'bg-yellow-500' :
+                                isPremium ? 'bg-blue-500' : 'bg-purple-500'
+                              }`}>
+                                #{priority - 1}
+                              </div>
+                            )}
+                          </div>
                         </div>
-
-                        {/* Views */}
-                        <div className="absolute top-3 right-3 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-                          {property.views_count || 0} views
-                        </div>
-                      </div>
 
                       {/* Property Info */}
                       <div className="p-6">
