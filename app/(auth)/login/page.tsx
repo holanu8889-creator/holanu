@@ -238,8 +238,12 @@ export default function LoginPage() {
             <div className="mt-4 text-center">
               <p className="text-xs text-gray-500">
                 Dengan login, Anda menyetujui{' '}
-                <a href="#" className="text-blue-600 hover:text-blue-500 transition-colors">
+                <a href="/terms-of-service" className="text-blue-600 hover:text-blue-500 transition-colors">
                   Syarat & Ketentuan
+                </a>
+                {' '}dan{' '}
+                <a href="/privacy-policy" className="text-blue-600 hover:text-blue-500 transition-colors">
+                  Kebijakan Privasi
                 </a>
               </p>
             </div>

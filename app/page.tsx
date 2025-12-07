@@ -67,9 +67,46 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white py-8">
-        <div className="container mx-auto px-4 text-center">
-          <p>&copy; 2024 HOLANU. Website ini masih dalam tahap pengembangan.</p>
+      <footer className="bg-gray-800 text-white py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <h3 className="text-xl font-bold mb-4">HOLANU</h3>
+              <p className="text-gray-300">
+                Marketplace Properti Digital Indonesia
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Layanan</h4>
+              <ul className="space-y-2 text-gray-300">
+                <li><a href="#" className="hover:text-white transition-colors">Jual Properti</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Sewa Properti</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Listing Agent</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Dukungan</h4>
+              <ul className="space-y-2 text-gray-300">
+                <li><a href="/privacy-policy" className="hover:text-white transition-colors">Kebijakan Privasi</a></li>
+                <li><a href="/terms-of-service" className="hover:text-white transition-colors">Syarat & Ketentuan</a></li>
+                <li><a href="mailto:info@holanu.com" className="hover:text-white transition-colors">Kontak Kami</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Kontak</h4>
+              <ul className="space-y-2 text-gray-300">
+                <li>WhatsApp: +62 812-3456-7890</li>
+                <li>Email: info@holanu.com</li>
+                <li>Indonesia</li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 pt-8 text-center">
+            <p>&copy; 2024 HOLANU. Semua hak dilindungi undang-undang.</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Website ini masih dalam tahap pengembangan.
+            </p>
+          </div>
         </div>
       </footer>
     </main>

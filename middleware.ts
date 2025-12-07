@@ -5,14 +5,19 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: req })
 
+  const pathname = req.nextUrl.pathname
+
+  // Skip middleware for auth paths to avoid interfering with OAuth callback
+  if (pathname.startsWith('/auth/')) {
+    return res
+  }
+
   // buat supabase client yang bisa baca cookie di middleware/edge
   const supabase = createMiddlewareClient({ req, res })
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const pathname = req.nextUrl.pathname
 
   // protection rules
   const isDashboard = pathname.startsWith('/dashboard')
@@ -29,5 +34,14 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
 }
