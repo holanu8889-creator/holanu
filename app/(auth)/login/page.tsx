@@ -230,7 +230,7 @@ export default function LoginPage() {
             </div>
 
             <div className="mt-6 text-center">
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-500 transition-colors">
+              <a href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500 transition-colors">
                 Lupa Password?
               </a>
             </div>
