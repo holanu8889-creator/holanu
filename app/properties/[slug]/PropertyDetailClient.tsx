@@ -1,59 +1,33 @@
-import { notFound } from 'next/navigation'
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
-import { Metadata } from 'next'
 import { propertyService, Property } from '@/lib/property.service'
-import { SEOUtils } from '@/lib/seo.utils'
-import PropertyDetailClient from './PropertyDetailClient'
 
-interface PageProps {
-  params: {
-    slug: string
-  }
+interface PropertyDetailClientProps {
+  property: Property
 }
 
-// Generate metadata for SEO
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  try {
-    const seo = await SEOUtils.generatePropertySEO(params.slug)
-    return SEOUtils.toNextMetadata(seo)
-  } catch (error) {
-    return {
-      title: 'Properti Dijual | HOLANU Marketplace',
-      description: 'Temukan properti impian Anda di HOLANU, marketplace properti digital Indonesia.',
+export default function PropertyDetailClient({ property }: PropertyDetailClientProps) {
+  const [selectedImage, setSelectedImage] = useState(0)
+
+  const handleWhatsappClick = async () => {
+    if (!property?.agent?.whatsapp) return
+
+    // Increment WhatsApp click count
+    await propertyService.incrementWhatsappClicks(property.id)
+
+    // Open WhatsApp
+    const message = `Halo, saya tertarik dengan properti "${property.title}" dengan harga ${propertyService.formatPrice(property.price)}. Bisakah saya mendapatkan informasi lebih detail?`
+    const whatsappUrl = `https://wa.me/${property.agent.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`
+    window.open(whatsappUrl, '_blank')
+  }
+
+  const handlePhoneClick = () => {
+    if (property?.agent?.whatsapp) {
+      window.location.href = `tel:${property.agent.whatsapp.replace(/\D/g, '')}`
     }
   }
-}
-
-// Server component for data fetching
-export default async function PropertyDetailPage({ params }: PageProps) {
-  try {
-    const property = await propertyService.getPropertyById(params.slug)
-
-    if (property.status !== 'approved') {
-      notFound()
-    }
-
-    // Generate structured data
-    const seo = await SEOUtils.generatePropertySEO(params.slug)
-
-    return (
-      <>
-        {/* Structured Data */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(seo.structuredData),
-          }}
-        />
-
-        {/* Client component for interactivity */}
-        <PropertyDetailClient property={property} />
-      </>
-    )
-  } catch (error) {
-    notFound()
-  }
-}
 
   return (
     <div className="min-h-screen bg-gray-50">
